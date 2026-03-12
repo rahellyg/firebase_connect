@@ -47,7 +47,7 @@ export default function Dashboard() {
     const result = await requestNotificationPermission()
     setPermission(result)
     if (result === 'granted') {
-      showNotification('Notifications enabled', { body: 'You’ll get reminders at the times you set.' })
+      showNotification('Notifications enabled ', { body: 'You’ll get reminders at the times you set.' })
       setNotificationMessage('Enabled! Try “Send test now” below.')
     } else if (result === 'denied') {
       setNotificationMessage('Notifications were blocked. Allow them in your browser settings for this site, then refresh.')
