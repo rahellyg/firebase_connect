@@ -12,6 +12,8 @@ import {
   showNotification,
   formatTime,
 } from '../utils/notifications'
+import { getFCMToken, hasVapidKey, onForegroundMessage } from '../firebase/messaging'
+import { addScheduledPush, removeScheduledPush, listScheduledPush } from '../firebase/scheduledPush'
 import './Dashboard.css'
 
 function generateId() {
@@ -23,13 +25,45 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const [permission, setPermission] = useState(getNotificationPermission())
   const [schedules, setSchedules] = useState(getScheduledNotifications())
+  const [pushSchedules, setPushSchedules] = useState([])
+  const [pushLoading, setPushLoading] = useState(false)
   const [time, setTime] = useState('09:00')
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [repeatDaily, setRepeatDaily] = useState(false)
   const [notificationMessage, setNotificationMessage] = useState(null)
+  const [toast, setToast] = useState(null)
 
+  const usePush = hasVapidKey()
   useNotificationScheduler()
+
+  useEffect(() => {
+    if (!usePush || !user) return
+    onForegroundMessage()
+  }, [usePush, user])
+
+  const loadPushSchedules = useCallback(async () => {
+    if (!usePush || !user?.uid) return
+    setPushLoading(true)
+    try {
+      const list = await listScheduledPush(user.uid)
+      setPushSchedules(list)
+    } catch (e) {
+      console.warn('Load push schedules failed:', e)
+    } finally {
+      setPushLoading(false)
+    }
+  }, [usePush, user?.uid])
+
+  useEffect(() => {
+    loadPushSchedules()
+  }, [loadPushSchedules])
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 6000)
+    return () => clearTimeout(t)
+  }, [toast])
 
   const refreshSchedules = useCallback(() => setSchedules(getScheduledNotifications()), [])
 
@@ -47,25 +81,56 @@ export default function Dashboard() {
     const result = await requestNotificationPermission()
     setPermission(result)
     if (result === 'granted') {
-      showNotification('Notifications enabled ', { body: 'You’ll get reminders at the times you set.' })
+      showNotification('Notifications enabled', { body: 'You’ll get reminders at the times you set.' })
       setNotificationMessage('Enabled! Try “Send test now” below.')
     } else if (result === 'denied') {
       setNotificationMessage('Notifications were blocked. Allow them in your browser settings for this site, then refresh.')
     }
   }
 
-  function handleAddSchedule(e) {
+  async function handleAddSchedule(e) {
     e.preventDefault()
     const id = generateId()
     addScheduledNotification({ id, time, title: title || 'Reminder', body, repeatDaily })
     setTitle('')
     setBody('')
     refreshSchedules()
+
+    if (usePush && user?.uid && permission === 'granted') {
+      try {
+        const token = await getFCMToken()
+        if (token) {
+          await addScheduledPush({
+            userId: user.uid,
+            fcmToken: token,
+            time,
+            title: title || 'Reminder',
+            body,
+            repeatDaily,
+          })
+          await loadPushSchedules()
+          setNotificationMessage('Scheduled. You’ll get a push even when the app is closed (after you deploy the Cloud Function).')
+        } else {
+          setNotificationMessage('Push when closed: run "npm run generate:sw", then reload. Deploy the Cloud Function to send at scheduled times.')
+        }
+      } catch (err) {
+        setNotificationMessage('Could not save for push when closed: ' + (err?.message || err))
+      }
+    }
   }
 
   function handleRemoveSchedule(id) {
     removeScheduledNotification(id)
     refreshSchedules()
+  }
+
+  async function handleRemovePushSchedule(docId) {
+    try {
+      await removeScheduledPush(docId)
+      await loadPushSchedules()
+    } catch (e) {
+      setNotificationMessage('Failed to remove: ' + (e?.message || e))
+    }
   }
 
   async function handleTestNotification() {
@@ -81,7 +146,8 @@ export default function Dashboard() {
     }
     const result = showNotification('Test notification', { body: 'If you see this, notifications work.' })
     if (result.ok) {
-      setNotificationMessage('Notification sent! Check your taskbar or system tray (bottom-right on Windows). If you don’t see it: try minimizing this window, or check Focus Assist / Do Not Disturb.')
+      setNotificationMessage('Notification sent!')
+      setToast(true)
     } else {
       setNotificationMessage(`Failed: ${result.error}. Try enabling notifications above or check browser settings.`)
     }
@@ -112,6 +178,19 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard">
+      {toast && (
+        <div className="notifications-toast" role="status">
+          <strong>Notification was sent</strong>
+          <p>If you don’t see a popup:</p>
+          <ol>
+            <li>Minimize this browser window, then click “Send test now” again.</li>
+            <li>Look at the <strong>bottom-right</strong> of your screen (Windows) or the <strong>top-right</strong> (Mac).</li>
+            <li>Or click the <strong>date/time</strong> in the taskbar to open the action center.</li>
+            <li>Turn off <strong>Focus Assist</strong> (Windows) or <strong>Do Not Disturb</strong>.</li>
+          </ol>
+          <button type="button" className="notifications-toast-dismiss" onClick={() => setToast(null)}>Dismiss</button>
+        </div>
+      )}
       <header className="dashboard-header">
         <h1>Dashboard</h1>
         <div className="dashboard-user">
@@ -172,7 +251,13 @@ export default function Dashboard() {
                 “Send test now” asks for permission if needed, then shows a notification. Check your taskbar or system tray. “Notify me in 1 minute” tests the scheduler (keep this tab open).
               </p>
               <div className="notifications-troubleshoot">
-                <strong>If no notification appears:</strong> On Windows, open the action center (click the date/time). Turn off Focus Assist. In Chrome, lock icon → Site settings → Notifications → Allow. Try minimizing the browser and clicking “Send test now” again.
+                <strong>Why you might not see the system notification:</strong>
+                <ul>
+                  <li>Browser is in focus — <strong>minimize the window</strong> and click “Send test now” again.</li>
+                  <li>Focus Assist / Do Not Disturb is on — turn it off in Windows settings or the action center.</li>
+                  <li>Site not allowed — Chrome: lock icon → Site settings → Notifications → Allow.</li>
+                  <li>Look in the action center (click date/time in taskbar) — notifications sometimes appear there without a popup.</li>
+                </ul>
               </div>
 
               {permission === 'granted' && (
@@ -220,12 +305,13 @@ export default function Dashboard() {
                     </button>
                   </form>
 
-                  {schedules.length > 0 && (
+                  {(schedules.length > 0 || pushSchedules.length > 0) && (
                     <div className="notifications-list">
                       <h3>Scheduled</h3>
+                      {pushLoading && <p className="notifications-loading">Loading…</p>}
                       <ul>
                         {schedules.map((n) => (
-                          <li key={n.id}>
+                          <li key={'local-' + n.id}>
                             <span className="notifications-list-time">{n.time}</span>
                             <span className="notifications-list-title">{n.title}</span>
                             {n.repeatDaily && <span className="notifications-list-badge">daily</span>}
@@ -239,7 +325,28 @@ export default function Dashboard() {
                             </button>
                           </li>
                         ))}
+                        {pushSchedules.map((n) => (
+                          <li key={'push-' + n.id}>
+                            <span className="notifications-list-time">{n.time}</span>
+                            <span className="notifications-list-title">{n.title}</span>
+                            {n.repeatDaily && <span className="notifications-list-badge">daily</span>}
+                            <span className="notifications-list-badge">push</span>
+                            <button
+                              type="button"
+                              className="notifications-list-remove"
+                              onClick={() => handleRemovePushSchedule(n.id)}
+                              aria-label="Remove"
+                            >
+                              ×
+                            </button>
+                          </li>
+                        ))}
                       </ul>
+                      {usePush && (
+                        <p className="notifications-test-hint" style={{ marginTop: '0.5rem' }}>
+                          Items with “push” are sent even when the app is closed (deploy the Cloud Function first).
+                        </p>
+                      )}
                     </div>
                   )}
                 </>

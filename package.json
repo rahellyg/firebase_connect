@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "node scripts/generate-messaging-sw.cjs && vite build",
+    "preview": "vite preview",
+    "generate:sw": "node scripts/generate-messaging-sw.cjs"
   },
   "dependencies": {
     "firebase": "^11.0.1",

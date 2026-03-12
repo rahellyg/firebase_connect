@@ -59,14 +59,14 @@ export async function requestNotificationPermission() {
 }
 
 /**
- * Show a local notification. Uses main-thread Notification for reliability.
+ * Show a local notification (main thread).
  * @returns {{ ok: boolean, error?: string }}
  */
 export function showNotification(title, options = {}) {
   if (!isNotificationSupported()) return { ok: false, error: 'Notifications not supported' }
   if (Notification.permission !== 'granted') return { ok: false, error: 'Permission not granted' }
   try {
-    const { body: b, tag: t, ...rest } = options
+    const { body: b, ...rest } = options
     const opts = { body: b ?? '', tag: 'firebase-connect', ...rest }
     new Notification(title, opts)
     return { ok: true }

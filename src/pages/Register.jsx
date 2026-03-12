@@ -8,15 +8,10 @@ const authErrors = {
   'auth/invalid-email': 'Please enter a valid email address.',
   'auth/weak-password': 'Password should be at least 6 characters.',
   'auth/operation-not-allowed': 'Email/Password sign-in is disabled. Enable it in Firebase Console → Authentication → Sign-in method → Email/Password.',
-  'auth/invalid-api-key': 'Firebase API key is invalid for this project.',
-  'auth/app-not-authorized': 'This app/domain is not authorized for this Firebase project.',
 }
 
-function getErrorMessage(error) {
-  const code = error?.code
-  if (code && authErrors[code]) return authErrors[code]
-  if (code) return `Registration failed (${code}).`
-  return 'Something went wrong. Please try again.'
+function getErrorMessage(code) {
+  return authErrors[code] || 'Something went wrong. Please try again.'
 }
 
 const MIN_PASSWORD_LENGTH = 6
@@ -50,7 +45,10 @@ export default function Register() {
       await register(email.trim(), password)
       navigate('/', { replace: true })
     } catch (err) {
-      setError(getErrorMessage(err))
+      // 400 from signUp usually means Email/Password is not enabled in Firebase Console
+      const code = err?.code
+      const is400 = code === 'auth/operation-not-allowed' || err?.message?.includes('400') || (err?.code && String(err.code).includes('400'))
+      setError(getErrorMessage(code || (is400 ? 'auth/operation-not-allowed' : null)))
     } finally {
       setSubmitting(false)
     }
