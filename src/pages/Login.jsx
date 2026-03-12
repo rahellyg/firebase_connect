@@ -5,13 +5,20 @@ import './Auth.css'
 
 const authErrors = {
   'auth/invalid-credential': 'Invalid email or password.',
+  'auth/invalid-login-credentials': 'Invalid email or password.',
   'auth/invalid-email': 'Please enter a valid email address.',
   'auth/user-disabled': 'This account has been disabled.',
   'auth/too-many-requests': 'Too many attempts. Try again later.',
+  'auth/operation-not-allowed': 'Email/Password sign-in is disabled in Firebase Console.',
+  'auth/invalid-api-key': 'Firebase API key is invalid for this project.',
+  'auth/app-not-authorized': 'This app/domain is not authorized for this Firebase project.',
 }
 
-function getErrorMessage(code) {
-  return authErrors[code] || 'Something went wrong. Please try again.'
+function getErrorMessage(error) {
+  const code = error?.code
+  if (code && authErrors[code]) return authErrors[code]
+  if (code) return `Authentication failed (${code}).`
+  return 'Something went wrong. Please try again.'
 }
 
 export default function Login() {
@@ -38,7 +45,7 @@ export default function Login() {
       await login(email.trim(), password)
       navigate('/', { replace: true })
     } catch (err) {
-      setError(getErrorMessage(err.code))
+      setError(getErrorMessage(err))
     } finally {
       setSubmitting(false)
     }

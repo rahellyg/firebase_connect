@@ -53,3 +53,7 @@ Open the URL shown (e.g. http://localhost:5173). Use **Register** to create an a
 - `npm run dev` – start dev server
 - `npm run build` – production build
 - `npm run preview` – preview production build
+
+## Docs
+
+- Push notifications guide: `docs/push-notifications.md`
