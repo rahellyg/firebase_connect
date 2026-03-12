@@ -13,7 +13,11 @@ Login and registration screens that save all registered users in **Firebase Auth
    Project settings (gear) → General → Your apps → Add web app (or use existing). Copy the `firebaseConfig` values.
 
 4. **Configure environment**:  
-   Copy `.env.example` to `.env` and set the variables:
+   Copy `.env.example` to `.env` and set Firebase variables.
+
+   Supported names:
+   - `VITE_FIREBASE_*` (standard Vite)
+   - `FIREBASE_*` (useful when reusing CI/repo secrets from other projects)
 
    ```
    VITE_FIREBASE_API_KEY=your-api-key
@@ -22,6 +26,17 @@ Login and registration screens that save all registered users in **Firebase Auth
    VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
    VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
    VITE_FIREBASE_APP_ID=1:123:web:abc...
+   ```
+
+   Or equivalent `FIREBASE_` names:
+
+   ```
+   FIREBASE_API_KEY=your-api-key
+   FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+   FIREBASE_PROJECT_ID=your-project-id
+   FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+   FIREBASE_MESSAGING_SENDER_ID=123456789
+   FIREBASE_APP_ID=1:123:web:abc...
    ```
 
 5. **Install and run**:
